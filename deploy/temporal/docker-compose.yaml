@@ -1,0 +1,213 @@
+name: harness-temporal
+
+services:
+  postgres:
+    image: postgres:16.4-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-harness}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-harness-local-dev}
+      POSTGRES_DB: postgres
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [control-plane]
+
+  temporal:
+    image: temporalio/auto-setup:1.25.2
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB: postgres12
+      DB_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-harness}
+      POSTGRES_PWD: ${POSTGRES_PASSWORD:-harness-local-dev}
+      POSTGRES_SEEDS: postgres
+    ports:
+      - "127.0.0.1:${TEMPORAL_GRPC_PORT:-7233}:7233"
+    networks: [control-plane]
+
+  temporal-ui:
+    image: temporalio/ui:2.31.2
+    restart: unless-stopped
+    depends_on:
+      - temporal
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_CORS_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
+    ports:
+      - "127.0.0.1:${TEMPORAL_UI_PORT:-8233}:8080"
+    networks: [control-plane]
+
+  redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [realtime]
+
+  minio:
+    image: minio/minio:RELEASE.2024-07-16T23-46-41Z
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-harness-admin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-harness-minio-local}
+    ports:
+      - "127.0.0.1:${MINIO_API_PORT:-9000}:9000"
+      - "127.0.0.1:${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    networks: [control-plane]
+
+  harness-api:
+    build:
+      context: ../..
+      dockerfile: deploy/harness/Dockerfile
+    restart: unless-stopped
+    command: ["uvicorn", "harness.api.app:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000"]
+    environment:
+      HARNESS_ENVIRONMENT: ${HARNESS_ENVIRONMENT:-development}
+      HARNESS_DATABASE_URL: ${HARNESS_DATABASE_URL:-postgresql://harness:harness-local-dev@postgres:5432/harness}
+      HARNESS_SECURITY_MODE: ${HARNESS_SECURITY_MODE:-dev}
+      HARNESS_CORS_ALLOWED_ORIGINS: ${HARNESS_CORS_ALLOWED_ORIGINS:-http://127.0.0.1:5173,http://localhost:5173}
+      HARNESS_ARTIFACT_STORAGE_BACKEND: minio
+      HARNESS_MINIO_ENDPOINT: http://minio:9000
+      HARNESS_MINIO_BUCKET: ${MINIO_BUCKET:-harness-artifacts}
+      HARNESS_MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-harness-admin}
+      HARNESS_MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-harness-minio-local}
+      HARNESS_REDIS_URL: redis://redis:6379/0
+      HARNESS_REDIS_EVENTS_ENABLED: "true"
+      HARNESS_TEMPORAL_TARGET: temporal:7233
+      HARNESS_TEMPORAL_ENABLED: "true"
+      HARNESS_TEMPORAL_AUTHORITATIVE_EXECUTION: ${HARNESS_TEMPORAL_AUTHORITATIVE_EXECUTION:-true}
+      HARNESS_LEGACY_RESUME_WORKER_ENABLED: "false"
+      HARNESS_RUNNER_MANAGER_URL: http://runner-manager:8099
+      HARNESS_RUNNER_RPC_TOKEN: ${HARNESS_RUNNER_RPC_TOKEN:-local-runner-token}
+      HARNESS_RUNNER_IMAGE: ${HARNESS_RUNNER_IMAGE:-harness-runner@sha256:local-dev}
+      HARNESS_RUNNER_ALLOWED_IMAGE_DIGESTS: ${HARNESS_RUNNER_ALLOWED_IMAGE_DIGESTS:-sha256:local-dev}
+      HARNESS_UI_TEST_TARGET_URL: ${HARNESS_UI_TEST_TARGET_URL:-http://host.docker.internal:5173}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      temporal:
+        condition: service_started
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_started
+    ports:
+      - "127.0.0.1:${HARNESS_API_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    networks: [control-plane, realtime]
+
+  harness-worker:
+    build:
+      context: ../..
+      dockerfile: deploy/harness/Dockerfile
+    restart: unless-stopped
+    command: ["harness-temporal-worker"]
+    environment:
+      HARNESS_ENVIRONMENT: ${HARNESS_ENVIRONMENT:-development}
+      HARNESS_DATABASE_URL: ${HARNESS_DATABASE_URL:-postgresql://harness:harness-local-dev@postgres:5432/harness}
+      HARNESS_SECURITY_MODE: ${HARNESS_SECURITY_MODE:-dev}
+      HARNESS_ARTIFACT_STORAGE_BACKEND: minio
+      HARNESS_MINIO_ENDPOINT: http://minio:9000
+      HARNESS_MINIO_BUCKET: ${MINIO_BUCKET:-harness-artifacts}
+      HARNESS_MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-harness-admin}
+      HARNESS_MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-harness-minio-local}
+      HARNESS_REDIS_URL: redis://redis:6379/0
+      HARNESS_REDIS_EVENTS_ENABLED: "true"
+      HARNESS_TEMPORAL_TARGET: temporal:7233
+      HARNESS_TEMPORAL_ENABLED: "true"
+      HARNESS_TEMPORAL_AUTHORITATIVE_EXECUTION: "true"
+      HARNESS_LEGACY_RESUME_WORKER_ENABLED: "false"
+      HARNESS_LANGGRAPH_ENABLED: ${HARNESS_LANGGRAPH_ENABLED:-true}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      temporal:
+        condition: service_started
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_started
+    networks: [control-plane, realtime]
+
+  harness-frontend:
+    build:
+      context: ../../../harness-front
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      harness-api:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${HARNESS_FRONTEND_PORT:-5173}:80"
+    networks: [control-plane]
+
+  runner-manager:
+    build:
+      context: ../..
+      dockerfile: deploy/runner-manager/Dockerfile
+    restart: unless-stopped
+    command: ["python", "-m", "harness.execution.runner_manager_app"]
+    environment:
+      HARNESS_DATABASE_URL: ${HARNESS_DATABASE_URL:-postgresql://harness:harness-local-dev@postgres:5432/harness}
+      HARNESS_RUNNER_MANAGER_HOST: 0.0.0.0
+      HARNESS_RUNNER_MANAGER_PORT: 8099
+      HARNESS_RUNNER_RPC_TOKEN: ${HARNESS_RUNNER_RPC_TOKEN:-local-runner-token}
+      HARNESS_RUNNER_IMAGE: ${HARNESS_RUNNER_IMAGE:-harness-runner:local}
+      HARNESS_RUNNER_ALLOWED_IMAGE_DIGESTS: ${HARNESS_RUNNER_ALLOWED_IMAGE_DIGESTS:-local-dev}
+      # Local UI E2E needs the runner to reach the explicitly configured target.
+      # Production must override this with its network-policy controlled setting.
+      HARNESS_RUNNER_EGRESS_POLICY: ${HARNESS_RUNNER_EGRESS_POLICY:-default}
+      HARNESS_RUNNER_SECCOMP_PROFILE: ${HARNESS_RUNNER_SECCOMP_PROFILE:-default}
+      HARNESS_RUNNER_APPARMOR_PROFILE: ${HARNESS_RUNNER_APPARMOR_PROFILE:-}
+      HARNESS_RUNNER_SIGNATURE_REQUIRED: ${HARNESS_RUNNER_SIGNATURE_REQUIRED:-false}
+      HARNESS_RUNNER_MAX_CONCURRENT_TASKS: ${HARNESS_RUNNER_MAX_CONCURRENT_TASKS:-2}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - "127.0.0.1:${RUNNER_MANAGER_PORT:-8099}:8099"
+    networks: [control-plane]
+
+networks:
+  control-plane:
+    driver: bridge
+  realtime:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  redis-data:
+  minio-data:

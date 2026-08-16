@@ -1,0 +1,31 @@
+# Local runtime state, artifacts, databases and secrets
+data/
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+deploy/**/.env
+config/**/*.bak
+config/.locks/
+*.log
+
+# Python build artifacts and caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+
+# IDE and local assistant state
+.idea/
+.vscode/
+.claude/
+
+# Node/frontend dependencies and caches
+node_modules/
+frontend/node_modules/
+.pnpm-store/
+dist/
+build/

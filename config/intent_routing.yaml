@@ -1,0 +1,75 @@
+# Intent Routing Configuration
+# Maps user intents to target sub-agents with routing rules.
+# Extend this file to add new intents, agents, or keywords without code changes.
+
+intents:
+  requirements_analysis:
+    target_agent: requirements_analyst
+    pre_hooks: [load_knowledge_base]
+    post_hooks: [index_results]
+    keywords:
+      zh: ["需求", "requirement", "spec", "prd", "用户故事", "user story", "验收标准", "规格说明"]
+      en: ["requirement", "spec", "prd", "user story", "acceptance criteria"]
+
+  test_case_generation:
+    target_agent: test_case_generator
+    pre_hooks: [validate_requirements_exist]
+    post_hooks: []
+    keywords:
+      zh: ["生成用例", "test case", "测试用例", "场景", "编写用例", "测试场景"]
+      en: ["test case", "test scenario", "generate cases", "write cases"]
+
+  script_generation:
+    target_agent: script_generator
+    pre_hooks: [load_script_templates]
+    post_hooks: []
+    keywords:
+      zh: ["生成脚本", "script", "pytest", "selenium", "playwright", "自动化脚本", "写脚本", "代码生成"]
+      en: ["script", "pytest", "selenium", "playwright", "automation", "generate script"]
+
+  schedule_execution:
+    target_agent: scheduler_executor
+    pre_hooks: [validate_scripts_exist]
+    post_hooks: [notify_completion]
+    keywords:
+      zh: ["执行", "运行", "schedule", "run", "跑测试", "执行测试", "调度"]
+      en: ["execute", "run", "schedule", "trigger", "launch"]
+
+  log_analysis:
+    target_agent: log_analyst
+    pre_hooks: [load_error_patterns]
+    post_hooks: [store_diagnosis]
+    keywords:
+      zh: ["日志", "log", "诊断", "diagnos", "失败", "报错", "错误", "分析", "analyze", "failure", "fail", "trace", "root cause", "debug", "崩溃", "crash", "timeout", "超时"]
+      en: ["log", "diagnos", "failure", "fail", "trace", "root cause", "debug", "crash", "timeout", "error analysis"]
+
+  general:
+    target_agent: ""  # Master handles general queries directly
+    pre_hooks: []
+    post_hooks: []
+    keywords:
+      zh: ["帮助", "help", "hello", "你好", "hi", "介绍"]
+      en: ["help", "hello", "hi", "info", "about"]
+
+  planning:
+    target_agent: planner  # independent remote DAG-generation agent
+    pre_hooks: []
+    post_hooks: []
+    keywords:
+      zh: ["规划", "编排", "流程设计", "端到端", "依次", "然后", "接着", "全流程"]
+      en: ["plan", "orchestrate", "workflow", "pipeline", "end-to-end", "then"]
+
+# Keyword match threshold: at least this many keyword hits to consider a match
+keyword_min_matches: 2
+
+# Confidence ranges for keyword-only classification
+keyword_confidence:
+  base: 0.7
+  per_match: 0.05
+  max: 0.95
+
+# LLM-based classifier settings
+llm_classifier:
+  enabled: true
+  fallback_on_failure: true
+  default_intent: general

@@ -1,0 +1,33 @@
+id: scheduler_executor
+name: "Scheduling & Execution Agent"
+description: "Schedule test runs and execute test scripts"
+execution_mode: plan
+llm:
+  provider: anthropic
+  model: claude-sonnet-4-20250514
+  temperature: 0.1
+  max_tokens: 4096
+  fallback_providers: ["openai"]
+context:
+  max_turns: 20
+vector:
+  collection_name: executions
+  persist_directory: data/chroma
+tools:
+  - name: shell_executor
+    enabled: true
+    config:
+      allowed_commands: ["python", "pytest", "pip"]
+bind_skills: []
+mcp_servers:
+  - name: test-infra
+    transport: stdio
+    command: python
+    args: ["-m", "test_infra_mcp"]
+    tool_filter: ["deploy_test_build", "reset_test_data"]
+prompts:
+  system: |
+    You are the Scheduling & Execution Agent.
+    You work in Plan mode to schedule and run test executions.
+    Available: Knowledge Bases: {{ knowledge_bases | join(", ") }}, Tools: {{ local_tools | join(", ") }}, MCP Tools: {{ mcp_tools | join(", ") }}
+min_confidence: 0.6

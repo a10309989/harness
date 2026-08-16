@@ -1,0 +1,90 @@
+# Test Case Generation Agent Configuration
+id: test_case_generator
+name: "Test Case Generation Agent"
+description: "Generate structured test cases from requirements and scenarios"
+
+execution_mode: plan
+react_max_iterations: 10
+
+capabilities:
+  - name: test_case_generation
+    description: "Generate structured test cases from requirements"
+    keywords: ["用例", "test case", "测试用例", "生成用例", "场景"]
+
+llm:
+  provider: anthropic
+  model: claude-sonnet-4-20250514
+  temperature: 0.1
+  max_tokens: 8192
+  fallback_providers: ["openai"]
+
+context:
+  max_turns: 25
+  include_summary: true
+
+memory:
+  storage_path: data/memory/test_case_gen
+  short_term_ttl_seconds: 7200
+  long_term_enabled: true
+
+vector:
+  collection_name: test_cases
+  embedding_model: text-embedding-3-small
+  embedding_provider: openai
+  persist_directory: data/chroma
+
+knowledge_bases:
+  - name: test_templates
+    source_path: knowledge/test_templates
+    collection_name: test_templates
+
+tools:
+  - name: file_writer
+    enabled: true
+  - name: file_reader
+    enabled: true
+    config:
+      max_file_size_mb: 20
+
+bind_skills: []
+
+mcp_servers: []
+
+prompts:
+  system: |
+    {{ base_system_prompt }}
+    {{ skill_prompt_contributions }}
+
+    ## Execution Mode
+    You work in Plan mode:
+    1. Load and review the requirements context
+    2. Generate functional test cases with detailed steps
+    3. Generate edge case and boundary tests
+    4. Assign priorities and categories
+    5. Output structured TestCase objects
+
+    ## Output Format
+    Each test case should include:
+    - Title and description
+    - Priority (critical/high/medium/low)
+    - Category (functional/integration/performance/security/regression/e2e/smoke)
+    - Preconditions
+    - Test steps with expected results
+    - Test data requirements
+    - List of referenced requirements
+
+    ## Available Capabilities
+    - Knowledge Bases: {{ knowledge_bases | join(", ") }}
+    - Local Tools: {{ local_tools | join(", ") }}
+
+  generate_from_scenario: |
+    Generate test cases for the following scenario:
+
+    Scenario: {{ scenario_name }}
+    {{ scenario_description }}
+
+    Requirements: {{ requirements }}
+
+    Generate comprehensive test cases following the output format above.
+
+min_confidence: 0.6
