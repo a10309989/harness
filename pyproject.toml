@@ -1,0 +1,74 @@
+[project]
+name = "harness"
+version = "0.1.0"
+description = "Test Automation Agent Framework — AI-driven test lifecycle management"
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic>=2.0",
+    "pydantic-settings>=2.0",
+    "fastapi>=0.100",
+    "uvicorn[standard]>=0.20",
+    "httpx>=0.24",
+    "anthropic>=0.20",
+    "openai>=1.0",
+    "chromadb>=0.4.0",
+    "structlog>=23.0",
+    "pyyaml>=6.0",
+    "jinja2>=3.0",
+    "tenacity>=8.0",
+    "cachetools>=5.0",
+    "orjson>=3.8",
+    "python-dotenv>=1.0",
+    "python-ulid>=2.0",
+    "temporalio>=1.8",
+    "minio>=7.2",
+    "redis>=5.0",
+    "asyncpg>=0.30",
+    "langgraph>=0.2",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.21",
+    "faker>=18.0",
+    "ruff>=0.6",
+    "mypy>=1.10",
+]
+
+[project.scripts]
+harness-temporal-worker = "harness.temporal.worker:main"
+harness-runner-manager = "harness.execution.runner_manager_app:main"
+harness-redis-dlq-replay = "harness.messaging.redis_dlq:main"
+harness-migrate-artifacts-minio = "harness.artifacts.migrate_to_minio:main"
+harness-dr-drill = "harness.ops.drill:main"
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["harness*"]
+where = ["src"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "B011", "B008"]
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+check_untyped_defs = true
+warn_unused_ignores = true
+exclude = ["tests/"]

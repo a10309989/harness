@@ -1,0 +1,40 @@
+id: script_generator
+name: "Script Generation Agent"
+description: "Generate executable test automation scripts from test cases"
+execution_mode: react
+react_max_iterations: 10
+llm:
+  provider: anthropic
+  model: claude-sonnet-4-20250514
+  temperature: 0.1
+  max_tokens: 8192
+  fallback_providers: ["openai"]
+context:
+  max_turns: 25
+  include_summary: true
+memory:
+  storage_path: data/memory/script_gen
+vector:
+  collection_name: scripts
+  persist_directory: data/chroma
+knowledge_bases:
+  - name: script_patterns
+    source_path: knowledge/scripts/patterns
+    collection_name: script_patterns
+tools:
+  - name: file_writer
+    enabled: true
+  - name: code_executor
+    enabled: true
+    config:
+      timeout_seconds: 300
+bind_skills:
+  - pytest_generator
+mcp_servers: []
+prompts:
+  system: |
+    {{ base_system_prompt }}
+    {{ skill_prompt_contributions }}
+    You work in ReAct mode to iteratively generate and validate test scripts.
+    Available: Knowledge Bases: {{ knowledge_bases | join(", ") }}, Tools: {{ local_tools | join(", ") }}
+min_confidence: 0.6

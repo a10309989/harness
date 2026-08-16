@@ -1,0 +1,15 @@
+.git
+.idea
+.claude
+.venv
+.mypy_cache
+.pytest_cache
+.ruff_cache
+.pnpm-store
+__pycache__
+*.py[cod]
+frontend/node_modules
+data/artifacts
+*.log
+confirm.json
+la_dbg.json

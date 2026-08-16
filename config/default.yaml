@@ -1,0 +1,39 @@
+# Harness Framework — Global Default Configuration
+
+system:
+  name: "Harness Test Automation Agent Framework"
+  version: "0.1.0"
+  log_level: "INFO"
+  log_json: false
+
+llm:
+  default_provider: "anthropic"
+  api_keys:
+    # 在此填入真实 key（或保留 ${...} 引用，从环境变量/进程取）。
+    # 例如：anthropic: "sk-ant-xxxxxx"
+    anthropic: "${ANTHROPIC_API_KEY}"
+    openai: "${OPENAI_API_KEY}"
+
+chromadb:
+  persist_directory: "data/chroma"
+
+memory:
+  storage_path: "data/memory"
+  default_ttl_seconds: 3600
+
+session:
+  ttl_hours: 2
+  cleanup_interval_seconds: 300
+
+execution:
+  sandbox_dir: "data/sandboxes"
+  default_timeout_seconds: 3600
+  max_concurrency: 4
+
+security:
+  mode: "dev"
+  default_actor: "default-user"
+
+observability:
+  audit_enabled: true
+  outbox_poll_interval_seconds: 0.1

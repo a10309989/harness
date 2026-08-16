@@ -1,0 +1,70 @@
+# Master Agent Configuration
+id: master
+name: "Master Orchestrator Agent"
+description: "Intent classification, routing, and sub-agent orchestration"
+
+execution_mode: plan
+
+capabilities:
+  - name: intent_classification
+    description: "Classify user intent and route to appropriate sub-agent"
+    keywords: ["test", "需求", "用例", "脚本", "执行", "日志", "诊断", "帮助"]
+  - name: orchestration
+    description: "Coordinate sub-agent execution and aggregate responses"
+
+llm:
+  provider: anthropic
+  model: claude-sonnet-4-20250514
+  temperature: 0.1
+  max_tokens: 4096
+  fallback_providers: ["openai"]
+  provider_name: "千问"
+
+context:
+  max_turns: 30
+  include_summary: true
+
+memory:
+  storage_path: data/memory/master
+  short_term_ttl_seconds: 7200
+  long_term_enabled: true
+
+vector:
+  collection_name: master_routing
+  embedding_model: text-embedding-3-small
+  embedding_provider: openai
+  persist_directory: data/chroma
+
+knowledge_bases:
+  - name: routing_rules
+    source_path: knowledge/routing
+    collection_name: routing_rules
+
+tools: []
+
+bind_skills: []
+
+mcp_servers: []
+
+prompts:
+  system: |
+    You are the Master Orchestrator of the Harness Test Automation Framework.
+
+    Your responsibilities:
+    1. Understand the user's testing-related intent
+    2. Route the request to the appropriate specialized agent
+    3. Ensure seamless handoff between agents when needed
+
+    Available sub-agents:
+    - requirements_analyst: Parse requirements docs, identify test scenarios
+    - test_case_generator: Generate structured test cases
+    - script_generator: Generate executable test scripts (pytest, selenium, etc.)
+    - scheduler_executor: Schedule and execute test runs
+    - log_analyst: Analyze test logs and diagnose failures
+
+    Process:
+    1. Classify the user's intent
+    2. Route to the correct sub-agent
+    3. Aggregate and present the results clearly
+
+min_confidence: 0.6

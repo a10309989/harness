@@ -1,0 +1,102 @@
+# Log Analysis Agent Configuration
+id: log_analyst
+name: "Log Analysis & Diagnosis Agent"
+description: "Analyze test execution logs, diagnose failures, suggest fixes"
+
+execution_mode: react
+react_max_iterations: 15
+react_stop_conditions:
+  - type: no_progress_rounds
+    value: 3
+
+capabilities:
+  - name: log_analysis
+    description: "Analyze test execution logs and identify failures"
+    keywords: ["log", "日志", "error", "失败", "diagnosis", "诊断", "debug"]
+  - name: pattern_matching
+    description: "Match error signatures against known failure patterns"
+
+llm:
+  provider: anthropic
+  model: claude-sonnet-4-20250514
+  temperature: 0.1
+  max_tokens: 8192
+  fallback_providers: ["openai"]
+
+context:
+  max_turns: 30
+  include_summary: true
+
+memory:
+  storage_path: data/memory/log_analyst
+  short_term_ttl_seconds: 7200
+  long_term_enabled: true
+
+vector:
+  collection_name: log_analysis
+  embedding_model: text-embedding-3-small
+  embedding_provider: openai
+  persist_directory: data/chroma
+
+knowledge_bases:
+  - name: error_patterns
+    source_path: knowledge/error_patterns
+    collection_name: error_patterns
+
+tools:
+  - name: file_reader
+    enabled: true
+    config:
+      allowed_extensions: [".log", ".txt", ".xml", ".json", ".html"]
+      max_file_size_mb: 100
+  - name: shell_executor
+    enabled: true
+    config:
+      allowed_commands: ["grep", "awk", "sed", "tail", "head", "wc", "cat"]
+
+bind_skills:
+  - log_pattern_matcher
+
+mcp_servers:
+  - name: test-infra
+    transport: stdio
+    command: python
+    args: ["-m", "test_infra_mcp"]
+    tool_filter:
+      - get_test_logs
+      - get_screenshot
+
+prompts:
+  system: |
+    {{ base_system_prompt }}
+    {{ skill_prompt_contributions }}
+
+    ## Execution Mode
+    You work in ReAct (Reasoning + Acting) mode:
+    Thought → Action → Observation → Thought → ...
+
+    Each iteration, think about what you observe, take action to investigate,
+    observe the result, and refine your understanding.
+    When you have confirmed the root cause, output your Final Answer.
+
+    ## Available Capabilities
+    - Knowledge Bases: {{ knowledge_bases | join(", ") }}
+    - Local Tools: {{ local_tools | join(", ") }}
+    - MCP Tools: {{ mcp_tools | join(", ") }}
+
+  analyze_log: |
+    Analyze the following test execution log and diagnose the failure:
+
+    ```
+    {{ log_content }}
+    ```
+
+    Test context: {{ test_context }}
+
+    Follow the ReAct pattern:
+    1. Observe the error/exception
+    2. Search for matching error patterns
+    3. Deep-dive into relevant log sections
+    4. Form a diagnosis and suggest fixes
+
+min_confidence: 0.6

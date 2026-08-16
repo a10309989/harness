@@ -1,0 +1,83 @@
+# Requirements Analysis Agent Configuration
+id: requirements_analyst
+name: "Requirements Analysis Agent"
+description: "Parse requirements documents and identify testable scenarios"
+
+execution_mode: plan
+react_max_iterations: 10
+
+capabilities:
+  - name: requirements_analysis
+    description: "Parse requirements docs and identify test scenarios"
+    keywords: ["需求", "requirement", "spec", "prd", "用户故事", "user story", "验收标准"]
+  - name: scenario_identification
+    description: "Identify functional and non-functional test scenarios from requirements"
+
+llm:
+  provider: anthropic
+  model: claude-sonnet-4-20250514
+  temperature: 0.1
+  max_tokens: 8192
+  fallback_providers: ["openai"]
+
+context:
+  max_turns: 30
+  include_summary: true
+
+memory:
+  storage_path: data/memory/requirements_analyst
+  short_term_ttl_seconds: 7200
+  long_term_enabled: true
+
+vector:
+  collection_name: requirements
+  embedding_model: text-embedding-3-small
+  embedding_provider: openai
+  persist_directory: data/chroma
+
+knowledge_bases:
+  - name: routing_rules
+    source_path: knowledge/routing
+    collection_name: routing_rules
+
+tools:
+  - name: file_reader
+    enabled: true
+    config:
+      allowed_extensions: [".txt", ".md", ".yaml", ".yml", ".json", ".xml", ".html", ".csv", ".pdf"]
+      max_file_size_mb: 50
+
+bind_skills: []
+
+mcp_servers: []
+
+prompts:
+  system: |
+    {{ base_system_prompt }}
+    {{ skill_prompt_contributions }}
+
+    ## Execution Mode
+    You work in Plan mode:
+    1. Parse and structure the requirements document
+    2. Identify functional and non-functional test scenarios
+    3. Extract acceptance criteria and edge cases
+    4. Output structured test scenario list
+
+    ## Available Capabilities
+    - Knowledge Bases: {{ knowledge_bases | join(", ") }}
+    - Local Tools: {{ local_tools | join(", ") }}
+
+  analyze_requirements: |
+    Analyze the following requirements document and extract testable scenarios:
+
+    {{ requirements_content }}
+
+    Context: {{ context }}
+
+    For each scenario, identify:
+    1. Functional test cases (happy path)
+    2. Edge cases and boundary conditions
+    3. Error handling scenarios
+    4. Non-functional test requirements
+
+min_confidence: 0.6
